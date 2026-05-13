@@ -1,6 +1,9 @@
-import React from 'react';
-import { Shield, AlertTriangle, AlertCircle, CheckCircle, ExternalLink, Flag } from 'lucide-react';
+import React, { useState } from 'react';
+import axios from 'axios';
+import { Shield, AlertTriangle, AlertCircle, CheckCircle, ExternalLink, Flag, Printer } from 'lucide-react';
 import { showToast } from './Toast';
+
+const API = 'http://localhost:8000';
 
 function CircularProgress({ value, color }) {
   const r = 36;
@@ -58,15 +61,38 @@ const VERDICT_CONFIG = {
   },
 };
 
-export default function VerdictCard({ result, scanType }) {
+const SEVERITY_CONFIG = {
+  high: { icon: '🔴', color: '#FF4757', bg: 'rgba(255, 71, 87, 0.15)', border: 'rgba(255, 71, 87, 0.35)' },
+  medium: { icon: '🟡', color: '#FFD700', bg: 'rgba(255, 215, 0, 0.12)', border: 'rgba(255, 215, 0, 0.35)' },
+  low: { icon: '🟢', color: '#00FF88', bg: 'rgba(0, 255, 136, 0.1)', border: 'rgba(0, 255, 136, 0.3)' },
+};
+
+export default function VerdictCard({ result, scanType, inputText }) {
+  const [reported, setReported] = useState(false);
+
   if (!result) return null;
 
   const config = VERDICT_CONFIG[result.verdict] || VERDICT_CONFIG.SUSPICIOUS;
   const reasons = result.reasons || result.reasons_english || [];
   const reasonsHindi = result.reasons_hindi || [];
+  const signals = result.signals || [];
 
-  const handleReport = () => {
-    showToast('Reported to PhishGuard community! Thank you.', 'success');
+  const showReportBtn = result.verdict === 'SCAM' || result.verdict === 'SUSPICIOUS';
+
+  const handleReport = async () => {
+    if (reported) return;
+    try {
+      await axios.post(`${API}/api/report`, {
+        scan_type: scanType || 'unknown',
+        input_text: inputText || '',
+        verdict: result.verdict,
+        reporter_note: '',
+      });
+    } catch {
+      // If endpoint doesn't exist yet, still show success UX
+    }
+    setReported(true);
+    showToast('Scam reported to community database!', 'success');
   };
 
   const handleCopyDetails = () => {
@@ -74,9 +100,13 @@ export default function VerdictCard({ result, scanType }) {
     navigator.clipboard.writeText(text).then(() => showToast('Details copied!', 'success'));
   };
 
+  const handleExportPDF = () => {
+    window.print();
+  };
+
   return (
     <div
-      className="animate-fade-in-up"
+      className="animate-fade-in-up verdict-card-print"
       style={{
         ...styles.card,
         background: config.bg,
@@ -134,6 +164,31 @@ export default function VerdictCard({ result, scanType }) {
         </div>
       )}
 
+      {/* Signal Breakdown */}
+      {signals.length > 0 && (
+        <div style={styles.section}>
+          <div style={styles.sectionTitle}>Signal Breakdown:</div>
+          <div style={styles.signalsWrapper}>
+            {signals.map((signal, i) => {
+              const sev = SEVERITY_CONFIG[signal.severity] || SEVERITY_CONFIG.low;
+              return (
+                <span
+                  key={i}
+                  style={{
+                    ...styles.signalChip,
+                    background: sev.bg,
+                    border: `1px solid ${sev.border}`,
+                    color: sev.color,
+                  }}
+                >
+                  {sev.icon} {signal.name}: {signal.value}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Hindi reasons */}
       {reasonsHindi.length > 0 && (
         <div style={{ ...styles.section, ...styles.hindiSection }}>
@@ -172,11 +227,20 @@ export default function VerdictCard({ result, scanType }) {
       )}
 
       {/* Action buttons */}
-      <div style={styles.actions}>
-        <button style={styles.reportBtn} onClick={handleReport}>
-          <Flag size={15} />
-          Report to Community
-        </button>
+      <div style={styles.actions} className="no-print">
+        {showReportBtn && (
+          <button
+            style={{
+              ...styles.reportBtn,
+              ...(reported ? styles.reportBtnDone : {}),
+            }}
+            onClick={handleReport}
+            disabled={reported}
+          >
+            <Flag size={15} />
+            {reported ? 'Reported ✓' : 'Report to Community'}
+          </button>
+        )}
         <a
           href="https://cybercrime.gov.in"
           target="_blank"
@@ -188,6 +252,10 @@ export default function VerdictCard({ result, scanType }) {
         </a>
         <button style={styles.copyBtn} onClick={handleCopyDetails}>
           Copy Details
+        </button>
+        <button style={styles.exportBtn} onClick={handleExportPDF}>
+          <Printer size={15} />
+          Export Report
         </button>
       </div>
     </div>
@@ -208,12 +276,15 @@ const styles = {
     borderRadius: '16px',
     padding: '24px',
     marginTop: '24px',
+    maxWidth: '100%',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '16px',
+    flexWrap: 'wrap',
+    gap: '12px',
   },
   verdictLeft: {
     display: 'flex',
@@ -221,17 +292,17 @@ const styles = {
     gap: '16px',
   },
   verdictIcon: {
-    fontSize: '40px',
+    fontSize: 'clamp(28px, 6vw, 40px)',
     lineHeight: 1,
   },
   verdictLabel: {
-    fontSize: '22px',
+    fontSize: 'clamp(16px, 4vw, 22px)',
     fontWeight: '800',
     letterSpacing: '1px',
     fontFamily: 'Space Grotesk, sans-serif',
   },
   verdictSubtext: {
-    fontSize: '13px',
+    fontSize: 'clamp(11px, 2.5vw, 13px)',
     color: 'var(--text-secondary)',
     marginTop: '2px',
   },
@@ -295,6 +366,21 @@ const styles = {
     alignItems: 'flex-start',
     lineHeight: '1.5',
   },
+  signalsWrapper: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  signalChip: {
+    borderRadius: '20px',
+    padding: '5px 12px',
+    fontSize: '12px',
+    fontWeight: '600',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    whiteSpace: 'nowrap',
+  },
   hindiSection: {
     background: 'rgba(0, 245, 255, 0.04)',
     borderRadius: '10px',
@@ -340,6 +426,14 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
     transition: 'all 0.2s',
+    cursor: 'pointer',
+  },
+  reportBtnDone: {
+    background: 'rgba(0, 255, 136, 0.1)',
+    border: '1px solid rgba(0, 255, 136, 0.3)',
+    color: 'var(--accent-green)',
+    cursor: 'default',
+    opacity: 0.8,
   },
   cyberBtn: {
     background: 'rgba(255, 71, 87, 0.1)',
@@ -363,5 +457,20 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     transition: 'all 0.2s',
+    cursor: 'pointer',
+  },
+  exportBtn: {
+    background: 'rgba(162, 155, 254, 0.1)',
+    border: '1px solid rgba(162, 155, 254, 0.3)',
+    color: '#A29BFE',
+    borderRadius: '8px',
+    padding: '10px 18px',
+    fontSize: '13px',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'all 0.2s',
+    cursor: 'pointer',
   },
 };

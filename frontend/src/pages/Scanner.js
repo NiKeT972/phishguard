@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link2, MessageSquare, Mail, Smartphone, Clipboard, Zap } from 'lucide-react';
+import { Link2, MessageSquare, Mail, Smartphone, Clipboard, Zap, Phone } from 'lucide-react';
 import VerdictCard from '../components/VerdictCard';
 import { showToast } from '../components/Toast';
 
@@ -11,6 +11,7 @@ const TABS = [
   { id: 'sms', label: 'SMS', icon: Smartphone, placeholder: 'Paste the suspicious SMS text here...', hint: 'Copy paste any suspicious SMS message' },
   { id: 'email', label: 'Email', icon: Mail, placeholder: 'Paste the suspicious email content here...', hint: 'Include sender address and full email body' },
   { id: 'upi', label: 'UPI ID', icon: MessageSquare, placeholder: 'Enter UPI ID to verify...', hint: 'e.g. helpdesk@upi or prize@ybl' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: Phone, placeholder: 'Paste the forwarded WhatsApp message here...', hint: 'Copy any suspicious WhatsApp forward' },
 ];
 
 const HERO_TEXTS = [
@@ -18,6 +19,24 @@ const HERO_TEXTS = [
   'India ka AI-powered scam shield.',
   'Real-time protection. Zero data collection.',
 ];
+
+const playAlertSound = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    // Web Audio API not available, silently ignore
+  }
+};
 
 export default function Scanner() {
   const [activeTab, setActiveTab] = useState('url');
@@ -60,9 +79,14 @@ export default function Scanner() {
       } else if (activeTab === 'upi') {
         res = await axios.post(`${API}/api/scan/upi`, { upi_id: input });
       } else {
+        // sms, email, whatsapp all go to /api/scan/text with their type
         res = await axios.post(`${API}/api/scan/text`, { text: input, type: activeTab });
       }
       setResult(res.data);
+      // Play alert sound for SCAM verdict
+      if (res.data && res.data.verdict === 'SCAM') {
+        playAlertSound();
+      }
     } catch (err) {
       const msg = err.response?.data?.detail || 'Backend connection failed. Make sure the server is running on port 8000.';
       showToast(msg, 'error');
@@ -72,7 +96,7 @@ export default function Scanner() {
   };
 
   const currentTab = TABS.find(t => t.id === activeTab);
-  const isTextarea = activeTab === 'sms' || activeTab === 'email';
+  const isTextarea = activeTab === 'sms' || activeTab === 'email' || activeTab === 'whatsapp';
 
   return (
     <div style={styles.page}>
@@ -185,10 +209,25 @@ export default function Scanner() {
               <button style={styles.demoBtn} onClick={() => setInput('merchant@oksbi')}>✅ Legit UPI</button>
             </>
           )}
+          {activeTab === 'whatsapp' && (
+            <>
+              <button style={styles.demoBtn} onClick={() => setInput('Congratulations! You have been selected as a winner in KBC Lucky Draw 2024. You have won Rs 25,00,000. To claim your prize, share your Aadhaar number and bank details with our agent on WhatsApp: 9876543210. Limited time offer!')}>🚨 KBC Lottery</button>
+              <button style={styles.demoBtn} onClick={() => setInput('URGENT: Your SBI account will be permanently blocked within 24 hours. Share your OTP and ATM PIN with our helpdesk to verify your identity. Call now: 1800-XXX-XXXX. Do not ignore this message.')}>🚨 OTP Scam</button>
+            </>
+          )}
         </div>
 
+        {/* Skeleton loader */}
+        {loading && (
+          <div style={styles.skeletonWrapper}>
+            <div className="skeleton" style={styles.skeletonBar} />
+            <div className="skeleton" style={{ ...styles.skeletonBar, width: '80%' }} />
+            <div className="skeleton" style={{ ...styles.skeletonBar, width: '60%' }} />
+          </div>
+        )}
+
         {/* Result */}
-        {result && <VerdictCard result={result} scanType={activeTab} />}
+        {result && !loading && <VerdictCard result={result} scanType={activeTab} inputText={input} />}
       </div>
 
       {/* Stats bar */}
@@ -288,7 +327,7 @@ const styles = {
     display: 'inline-block',
   },
   heroSub: {
-    fontSize: '16px',
+    fontSize: 'clamp(13px, 3vw, 16px)',
     color: 'var(--text-secondary)',
     maxWidth: '480px',
     margin: '0 auto 20px',
@@ -306,7 +345,7 @@ const styles = {
     color: 'var(--accent-cyan)',
     borderRadius: '20px',
     padding: '5px 14px',
-    fontSize: '12px',
+    fontSize: 'clamp(11px, 2vw, 12px)',
     fontWeight: '600',
   },
   scannerCard: {
@@ -318,7 +357,7 @@ const styles = {
   },
   tabs: {
     display: 'flex',
-    gap: '8px',
+    gap: '6px',
     marginBottom: '20px',
     background: 'var(--bg-secondary)',
     borderRadius: '12px',
@@ -326,21 +365,22 @@ const styles = {
     flexWrap: 'wrap',
   },
   tabBtn: {
-    flex: 1,
+    flex: '1 1 60px',
     background: 'none',
     border: 'none',
     color: 'var(--text-secondary)',
-    padding: '10px 12px',
+    padding: '8px 10px',
     borderRadius: '8px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '7px',
-    fontSize: '14px',
+    gap: '6px',
+    fontSize: 'clamp(12px, 2vw, 14px)',
     fontWeight: '600',
     transition: 'all 0.2s',
     cursor: 'pointer',
-    minWidth: '70px',
+    minWidth: '60px',
+    whiteSpace: 'nowrap',
   },
   tabBtnActive: {
     background: 'var(--bg-card)',
@@ -452,6 +492,21 @@ const styles = {
     fontSize: '12px',
     cursor: 'pointer',
     transition: 'all 0.2s',
+    maxWidth: '200px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  skeletonWrapper: {
+    marginTop: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  skeletonBar: {
+    height: '20px',
+    borderRadius: '6px',
+    width: '100%',
   },
   statsBar: {
     marginTop: '32px',
@@ -474,7 +529,7 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '2px',
-    minWidth: '120px',
+    minWidth: '100px',
   },
   statValue: {
     fontSize: '20px',

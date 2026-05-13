@@ -96,3 +96,60 @@ body {
 button { cursor: pointer; font-family: inherit; }
 a { text-decoration: none; color: inherit; }
 input, textarea { font-family: inherit; }
+
+/* Live dot indicator */
+.live-dot-wrapper {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #00FF88;
+  box-shadow: 0 0 6px #00FF88;
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 4px #00FF88; transform: scale(1); }
+  50% { box-shadow: 0 0 14px #00FF88, 0 0 24px rgba(0,255,136,0.4); transform: scale(1.2); }
+}
+
+/* Mobile responsive overrides */
+@media (max-width: 600px) {
+  .scanner-tabs {
+    flex-wrap: wrap !important;
+  }
+  .verdict-card-print {
+    padding: 16px !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  header,
+  nav,
+  .no-print,
+  .bottom-nav {
+    display: none !important;
+  }
+  .verdict-card-print {
+    background: #f9f9f9 !important;
+    border: 1px solid #ccc !important;
+    color: #000 !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+  .verdict-card-print * {
+    color: #000 !important;
+  }
+}
