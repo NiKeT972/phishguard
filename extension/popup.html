@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhishGuard</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <span class="shield-icon">🛡️</span>
+      <span class="logo-text">Phish<span class="cyan">Guard</span></span>
+    </div>
+    <div class="team-tag">DATA MAVERICKS</div>
+  </header>
+
+  <!-- Current page section -->
+  <div class="section">
+    <div class="section-label">CURRENT PAGE</div>
+    <div class="current-url" id="currentUrl">Loading...</div>
+    <button class="btn-primary" id="checkPageBtn">
+      <span>🔍</span> Check This Page
+    </button>
+  </div>
+
+  <!-- Result area -->
+  <div id="resultArea" class="hidden">
+    <div class="divider"></div>
+    <div class="result-card" id="resultCard">
+      <div class="result-header">
+        <span class="result-icon" id="resultIcon">⚠️</span>
+        <div>
+          <div class="result-verdict" id="resultVerdict">Analysing...</div>
+          <div class="result-confidence" id="resultConfidence"></div>
+        </div>
+      </div>
+      <div class="result-reasons" id="resultReasons"></div>
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div id="loadingArea" class="hidden">
+    <div class="divider"></div>
+    <div class="loading">
+      <span class="loading-shield">🛡️</span>
+      <span>Scanning with AI...</span>
+    </div>
+  </div>
+
+  <!-- Quick check section -->
+  <div class="divider"></div>
+  <div class="section">
+    <div class="section-label">QUICK CHECK</div>
+    <div class="input-row">
+      <input
+        type="text"
+        id="quickInput"
+        class="input"
+        placeholder="Paste URL, SMS text, or UPI ID..."
+      />
+      <button class="btn-icon" id="quickScanBtn" title="Scan">⚡</button>
+    </div>
+  </div>
+
+  <!-- Quick result -->
+  <div id="quickResultArea" class="hidden">
+    <div class="result-card mini" id="quickResultCard">
+      <span class="result-icon" id="quickResultIcon">⚠️</span>
+      <div>
+        <div class="result-verdict" id="quickResultVerdict"></div>
+        <div class="result-reasons mini" id="quickResultReasons"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="divider"></div>
+  <div class="footer">
+    <div class="stats-text" id="statsText">Protecting Indians from cyber scams</div>
+    <a href="http://localhost:3000" target="_blank" class="btn-outline">
+      Open Full App ↗
+    </a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
