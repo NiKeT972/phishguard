@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
@@ -96,13 +96,49 @@ function IndiaMap({ cityData }) {
   );
 }
 
-function StatCard({ icon: Icon, value, label, color, subtitle }) {
+function useCountUp(target, duration = 800) {
+  const [display, setDisplay] = useState(target);
+  const prevTarget = useRef(target);
+
+  useEffect(() => {
+    if (typeof target !== 'number' || target === prevTarget.current) {
+      setDisplay(target);
+      return;
+    }
+    const start = prevTarget.current || 0;
+    const diff = target - start;
+    const steps = 30;
+    const stepMs = duration / steps;
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const val = Math.round(start + (diff * step) / steps);
+      setDisplay(val);
+      if (step >= steps) {
+        clearInterval(timer);
+        setDisplay(target);
+      }
+    }, stepMs);
+    prevTarget.current = target;
+    return () => clearInterval(timer);
+  }, [target, duration]);
+
+  return display;
+}
+
+function StatCard({ icon: Icon, value, label, color, subtitle, animate }) {
+  const numericValue = typeof value === 'number' ? value : null;
+  const countedValue = useCountUp(animate && numericValue !== null ? numericValue : numericValue || 0);
+  const displayValue = animate && numericValue !== null
+    ? countedValue.toLocaleString('en-IN')
+    : (value || '—');
+
   return (
     <div style={styles.statCard}>
       <div style={{ ...styles.statIcon, background: `${color}15`, color }}>
         <Icon size={22} />
       </div>
-      <div style={styles.statValue}>{value}</div>
+      <div style={{ ...styles.statValue, transition: 'all 0.3s ease' }}>{displayValue}</div>
       <div style={styles.statLabel}>{label}</div>
       {subtitle && <div style={styles.statSub}>{subtitle}</div>}
     </div>
@@ -112,19 +148,40 @@ function StatCard({ icon: Icon, value, label, color, subtitle }) {
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
 
-  useEffect(() => {
+  const fetchStats = () => {
     axios.get(`${API}/api/stats`)
-      .then(r => setStats(r.data))
+      .then(r => {
+        setStats(r.data);
+        setLastUpdated(Date.now());
+        setSecondsAgo(0);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchStats();
+    const pollInterval = setInterval(fetchStats, 30000);
+    return () => clearInterval(pollInterval);
   }, []);
+
+  // Update "X seconds ago" counter every second
+  useEffect(() => {
+    if (!lastUpdated) return;
+    const ticker = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - lastUpdated) / 1000));
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [lastUpdated]);
 
   const pieData = stats
     ? Object.entries(stats.scam_distribution || {}).map(([name, value]) => ({ name, value }))
     : [];
 
-  const topThree = pieData.sort((a, b) => b.value - a.value).slice(0, 3);
+  const topThree = [...pieData].sort((a, b) => b.value - a.value).slice(0, 3);
 
   if (loading) {
     return (
@@ -147,12 +204,52 @@ export default function Dashboard() {
         <p style={styles.pageSubtitle}>Real-time threat intelligence across India</p>
       </div>
 
+      {/* Community Stats heading with Live dot */}
+      <div style={styles.communityHeadingRow}>
+        <h2 style={styles.communityHeading}>Community Stats</h2>
+        <span className="live-dot-wrapper" title="Live data">
+          <span className="live-dot" />
+        </span>
+        {lastUpdated && (
+          <span style={styles.lastUpdated}>
+            Last updated: {secondsAgo < 5 ? 'just now' : `${secondsAgo}s ago`}
+          </span>
+        )}
+      </div>
+
       {/* Stat cards */}
       <div style={styles.statsGrid}>
-        <StatCard icon={Shield} value={stats?.scams_detected_today?.toLocaleString('en-IN') || '—'} label="Scams Detected Today" color="var(--accent-red)" subtitle="↑ 12% from yesterday" />
-        <StatCard icon={AlertTriangle} value={stats?.scams_this_week_mumbai?.toLocaleString('en-IN') || '—'} label="Mumbai This Week" color="var(--accent-yellow)" subtitle="Top city by scam count" />
-        <StatCard icon={Users} value={stats?.total_users_protected?.toLocaleString('en-IN') || '—'} label="Indians Protected" color="var(--accent-green)" subtitle="Growing daily" />
-        <StatCard icon={TrendingUp} value={stats?.top_scam_type || '—'} label="Top Scam Type" color="var(--accent-cyan)" subtitle="Most reported this week" />
+        <StatCard
+          icon={Shield}
+          value={stats?.scams_detected_today || null}
+          label="Scams Detected Today"
+          color="var(--accent-red)"
+          subtitle="↑ 12% from yesterday"
+          animate
+        />
+        <StatCard
+          icon={AlertTriangle}
+          value={stats?.scams_this_week_mumbai || null}
+          label="Mumbai This Week"
+          color="var(--accent-yellow)"
+          subtitle="Top city by scam count"
+          animate
+        />
+        <StatCard
+          icon={Users}
+          value={stats?.total_users_protected || null}
+          label="Indians Protected"
+          color="var(--accent-green)"
+          subtitle="Growing daily"
+          animate
+        />
+        <StatCard
+          icon={TrendingUp}
+          value={stats?.top_scam_type || '—'}
+          label="Top Scam Type"
+          color="var(--accent-cyan)"
+          subtitle="Most reported this week"
+        />
       </div>
 
       {/* Charts row */}
@@ -254,10 +351,10 @@ const styles = {
     padding: '40px 20px 20px',
   },
   pageHeader: {
-    marginBottom: '32px',
+    marginBottom: '24px',
   },
   pageTitle: {
-    fontSize: '28px',
+    fontSize: 'clamp(20px, 4vw, 28px)',
     fontWeight: '800',
     fontFamily: 'Space Grotesk, sans-serif',
     marginBottom: '6px',
@@ -266,6 +363,23 @@ const styles = {
     fontSize: '15px',
     color: 'var(--text-secondary)',
   },
+  communityHeadingRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+  },
+  communityHeading: {
+    fontSize: 'clamp(16px, 3vw, 20px)',
+    fontWeight: '700',
+    fontFamily: 'Space Grotesk, sans-serif',
+  },
+  lastUpdated: {
+    fontSize: '12px',
+    color: 'var(--text-muted)',
+    marginLeft: 'auto',
+  },
   skeletonGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -273,7 +387,7 @@ const styles = {
   },
   statsGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
     gap: '16px',
     marginBottom: '24px',
   },
@@ -296,7 +410,7 @@ const styles = {
     marginBottom: '4px',
   },
   statValue: {
-    fontSize: '26px',
+    fontSize: 'clamp(20px, 4vw, 26px)',
     fontWeight: '800',
     fontFamily: 'Space Grotesk, sans-serif',
   },
@@ -311,7 +425,7 @@ const styles = {
   },
   chartsRow: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
     gap: '16px',
     marginBottom: '24px',
   },
@@ -354,7 +468,7 @@ const styles = {
     flexWrap: 'wrap',
   },
   trendingItem: {
-    flex: '1 1 180px',
+    flex: '1 1 160px',
     background: 'var(--bg-secondary)',
     borderRadius: '12px',
     padding: '20px',
@@ -391,6 +505,7 @@ const styles = {
     padding: '14px 0',
     borderBottom: '1px solid rgba(255,255,255,0.04)',
     gap: '12px',
+    flexWrap: 'wrap',
   },
   feedLeft: {
     display: 'flex',
